@@ -1,0 +1,167 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0d47a1" />
+  <meta name="description" content="Aplicativo para cálculo de amperagem de peças" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <title>Cálculo de Amperagem</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f4f8;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    h1 {
+      color: #0d47a1;
+    }
+    .input-group {
+      margin: 1rem 0;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 400px;
+    }
+    label {
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+      color: #333;
+    }
+    input {
+      padding: 0.5rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      background-color: #0d47a1;
+      color: white;
+      font-size: 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #1565c0;
+    }
+    button:disabled {
+      background-color: #90caf9;
+      cursor: not-allowed;
+    }
+    #resultado {
+      margin-top: 2rem;
+      font-size: 1.2rem;
+      color: #2e7d32;
+      text-align: center;
+    }
+    .error {
+      color: #d32f2f;
+    }
+  </style>
+</head>
+<body>
+  <h1>Cálculo de Amperagem</h1>
+
+  <div class="input-group">
+    <label for="diametro">Diâmetro da peça (mm):</label>
+    <input type="number" id="diametro" step="any" min="0" />
+
+    <label for="comprimento">Comprimento da peça (mm):</label>
+    <input type="number" id="comprimento" step="any" min="0" />
+
+    <label for="tempo">Tempo (minutos):</label>
+    <input type="number" id="tempo" step="any" min="0" />
+
+    <label for="quantidade">Quantidade de peças:</label>
+    <input type="number" id="quantidade" min="1" />
+
+    <button onclick="calcularAmperagem()">Calcular Amperagem</button>
+  </div>
+
+  <div id="resultado"></div>
+
+  <script>
+    function calcularAmperagem() {
+      const button = document.querySelector('button');
+      button.disabled = true;
+
+      const diametro = parseFloat(document.getElementById("diametro").value);
+      const comprimento = parseFloat(document.getElementById("comprimento").value);
+      const tempo = parseFloat(document.getElementById("tempo").value);
+      const quantidade = parseInt(document.getElementById("quantidade").value);
+      const resultadoDiv = document.getElementById("resultado");
+
+      if (isNaN(diametro) || isNaN(comprimento) || isNaN(tempo) || isNaN(quantidade) || 
+          diametro <= 0 || comprimento <= 0 || tempo <= 0 || quantidade <= 0) {
+        resultadoDiv.classList.add('error');
+        resultadoDiv.innerText = "Por favor, preencha todos os campos com valores válidos e positivos.";
+        button.disabled = false;
+        return;
+      }
+
+      const resultado = ((diametro * comprimento * 3.14 * tempo) / 10000) * quantidade;
+      resultadoDiv.classList.remove('error');
+      resultadoDiv.innerText = `Amperagem: ${resultado.toFixed(2)} A`;
+      button.disabled = false;
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(registration => console.log('Service Worker registrado com sucesso:', registration))
+          .catch(error => console.error('Erro ao registrar Service Worker:', error));
+      });
+    }
+  </script>
+</body>
+</html>
