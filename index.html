@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -113,6 +74,49 @@
     .error {
       color: #d32f2f;
     }
+    /* Estilos do modal para iOS */
+    .ios-prompt {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .ios-prompt-content {
+      background: #fff;
+      padding: 1.5rem;
+      border-radius: 10px;
+      max-width: 300px;
+      text-align: center;
+      font-size: 1rem;
+      color: #333;
+    }
+    .ios-prompt-content h3 {
+      margin: 0 0 1rem;
+      color: #0d47a1;
+    }
+    .ios-prompt-content p {
+      margin: 0 0 1rem;
+    }
+    .ios-prompt-content button {
+      background-color: #0d47a1;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+    }
+    .ios-prompt-content button:hover {
+      background-color: #1565c0;
+    }
+    .ios-prompt-content .share-icon {
+      vertical-align: middle;
+      width: 24px;
+      height: 24px;
+    }
   </style>
 </head>
 <body>
@@ -136,6 +140,22 @@
   </div>
 
   <div id="resultado"></div>
+
+  <!-- Modal para iOS -->
+  <div class="ios-prompt" id="iosPrompt">
+    <div class="ios-prompt-content">
+      <h3>Instalar Cálculo de Amperagem</h3>
+      <p>Adicione este aplicativo à sua Tela de Início para acesso rápido!</p>
+      <p>
+        Toque no ícone de compartilhamento
+        <svg class="share-icon" viewBox="0 0 24 24" fill="#007AFF">
+          <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+        </svg>
+        e selecione "Adicionar à Tela de Início".
+      </p>
+      <button onclick="closeIosPrompt()">Entendido</button>
+    </div>
+  </div>
 
   <script>
     function calcularAmperagem() {
@@ -165,6 +185,7 @@
     let deferredPrompt;
     const installButton = document.getElementById('install');
 
+    // Prompt para Android e outros dispositivos
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
@@ -187,11 +208,38 @@
       installButton.setAttribute('hidden', '');
     });
 
+    // Detectar iOS e exibir prompt personalizado
+    function isIos() {
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      return /iphone|ipad|ipod/.test(userAgent);
+    }
+
+    function isInStandaloneMode() {
+      return ('standalone' in window.navigator) && window.navigator.standalone;
+    }
+
+    function showIosPrompt() {
+      const iosPrompt = document.getElementById('iosPrompt');
+      const iosPromptShown = localStorage.getItem('iosPromptShown');
+      if (isIos() && !isInStandaloneMode() && !iosPromptShown) {
+        iosPrompt.style.display = 'flex';
+        localStorage.setItem('iosPromptShown', 'true');
+      }
+    }
+
+    function closeIosPrompt() {
+      const iosPrompt = document.getElementById('iosPrompt');
+      iosPrompt.style.display = 'none';
+    }
+
+    // Registrar Service Worker e verificar iOS
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/calc-de-amper/service-worker.js', { scope: '/calc-de-amper/' })
           .then(registration => {
             console.log('Service Worker registrado com sucesso:', registration);
+            // Verificar se está em iOS após o registro do Service Worker
+            showIosPrompt();
           })
           .catch(error => {
             console.error('Erro ao registrar Service Worker:', error);
